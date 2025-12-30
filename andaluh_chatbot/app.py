@@ -64,6 +64,7 @@ def load_agent():
         st.warning("Langfuse credentials not found. Langfuse will not be used.")
     return get_agent(), langfuse_handler
 
+
 try:
     agent, langfuse_handler = load_agent()
     if not agent:

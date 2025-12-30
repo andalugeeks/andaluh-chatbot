@@ -1,96 +1,96 @@
-# Sistema de Traducción y Chatbot Andalûh EPA 🇳🇬
+# Andalûh EPA Translation System and Chatbot 🇳🇬
 
-Este proyecto implementa un sistema de agentes inteligentes utilizando **LangChain** y **LangGraph** capaz de mantener una conversación (Chatbot) y traducir automáticamente sus respuestas a la propuesta ortográfica **Andalûh EPA** (Êttandâ pal Andalûh).
+This project implements an intelligent agent system using **LangChain** and **LangGraph** capable of maintaining a conversation (Chatbot) and automatically translating its responses to the **Andalûh EPA** (Êttandâ pal Andalûh) orthographic proposal.
 
-Permite interactuar tanto por línea de comandos (CLI) como a través de una interfaz web moderna construida con **Streamlit**, y soporta múltiples proveedores de LLM (Google Gemini y Ollama).
+It allows interaction both via command line (CLI) and through a modern web interface built with **Streamlit**, and supports multiple LLM providers (Google Gemini and Ollama).
 
-## Características
+## Features
 
-*   **Arquitectura de Agentes**: Pipeline inteligente `Chatbot -> Traductor` usando LangGraph.
-*   **Multi-Modelo**: Soporte nativo para:
-    *   **Google Gemini** (vía API).
-    *   **Ollama** (Modelos locales como Llama 3, Mistral, etc.).
+*   **Agent Architecture**: Intelligent pipeline `Chatbot -> Translator` using LangGraph.
+*   **Multi-Model**: Native support for:
+    *   **Google Gemini** (via API).
+    *   **Ollama** (Local models like Llama 3, Mistral, etc.).
 *   **Interfaces**:
-    *   🖥️ **CLI**: Interfaz de terminal sencilla.
-    *   🌐 **Web App**: Aplicación completa con Streamlit, incluyendo autenticación básica.
-*   **Dockerizado**: Despliegue sencillo con Docker Compose (incluyendo Ollama).
+    *   🖥️ **CLI**: Simple terminal interface.
+    *   🌐 **Web App**: Full application with Streamlit, including basic authentication.
+*   **Dockerized**: Easy deployment with Docker Compose (including Ollama).
 
-## Estructura del Proyecto
+## Project Structure
 
-*   `agents.py`: Definición del grafo de LangGraph y lógica de los agentes.
-*   `tools.py`: Herramientas personalizadas (wrapper de la librería `andaluh`).
-*   `app.py`: Aplicación web Streamlit.
-*   `main.py`: Punto de entrada CLI.
-*   `tests/`: Suite de tests unitarios para verificar las reglas de traducción.
+*   `agents.py`: LangGraph graph definition and agent logic.
+*   `tools.py`: Custom tools (wrapper for the `andaluh` library).
+*   `app.py`: Streamlit web application.
+*   `main.py`: CLI entry point.
+*   `tests/`: Unit test suite to verify translation rules.
 
 ---
 
-## 🚀 Despliegue Rápido con Docker (Recomendado)
+## 🚀 Quick Deployment with Docker (Recommended)
 
-La forma más sencilla de ejecutar todo el stack (App Web + Ollama Local) es usando Docker Compose.
+The easiest way to run the full stack (Web App + Local Ollama) is using Docker Compose.
 
-1.  **Levantar los servicios**:
+1.  **Start the services**:
     ```bash
     docker compose up --build -d
     ```
 
-2.  **Descargar modelo (Solo primera vez)**:
-    Si usas Ollama, necesitas bajar el modelo dentro del contenedor:
+2.  **Download model (First time only)**:
+    If using Ollama, you need to download the model inside the container:
     ```bash
     docker exec -it andaluh-ollama ollama run llama3.2
     ```
 
-3.  **Acceder**:
-    Abre tu navegador en [http://localhost:8501](http://localhost:8501).
-    *   **Usuario**: `admin`
-    *   **Contraseña**: `andaluh`
+3.  **Access**:
+    Open your browser at [http://localhost:8501](http://localhost:8501).
+    *   **User**: `admin`
+    *   **Password**: `andaluh`
 
 ---
 
-## 🛠️ Instalación y Uso Local (Desarrollo)
+## 🛠️ Local Installation and Usage (Development)
 
-### Requisitos
+### Requirements
 *   Python 3.11+
-*   (Opcional) Ollama instalado localmente o API Key de Google.
+*   (Optional) Ollama installed locally or Google API Key.
 
-### 1. Configuración de Entorno
+### 1. Environment Setup
 
-1.  Crear entorno virtual:
+1.  Create virtual environment:
     ```bash
     python3 -m venv venv
     source venv/bin/activate
     ```
 
-2.  Instalar dependencias:
+2.  Install dependencies:
     ```bash
     pip install -r andaluh_chatbot/requirements.txt
     ```
 
-3.  Configurar variables de entorno:
-    Crea un archivo `.env` en `andaluh_chatbot/.env` basado en el siguiente ejemplo:
+3.  Configure environment variables:
+    Create a `.env` file in `andaluh_chatbot/.env` based on the following example:
 
-    **Para usar Ollama (Local):**
+    **To use Ollama (Local):**
     ```env
     LLM_PROVIDER=ollama
     OLLAMA_BASE_URL=http://127.0.0.1:11434
     OLLAMA_MODEL=llama3.2:latest
     ```
 
-    **Para usar Google Gemini (Cloud):**
+    **To use Google Gemini (Cloud):**
     ```env
     LLM_PROVIDER=google
-    GOOGLE_API_KEY=tu_api_key_aqui
+    GOOGLE_API_KEY=your_api_key_here
     MODEL=gemini-2.5-flash
     ```
 
-### 2. Ejecutar Aplicación
+### 2. Run Application
 
-**Interfaz de Comandos (CLI):**
+**Command Line Interface (CLI):**
 ```bash
 python -m andaluh_chatbot.main
 ```
 
-**Interfaz Web (Streamlit):**
+**Web Interface (Streamlit):**
 ```bash
 streamlit run andaluh_chatbot/app.py
 ```
@@ -99,9 +99,9 @@ streamlit run andaluh_chatbot/app.py
 
 ## ✅ Tests
 
-El proyecto incluye tests para verificar que las reglas de traducción (seseo, ceceo, apertura de vocales, etc.) se aplican correctamente.
+The project includes tests to verify that translation rules (seseo, ceceo, vowel opening, etc.) are applied correctly.
 
-Ejecutar tests:
+Run tests:
 ```bash
 python -m unittest andaluh_chatbot/tests/test_translation.py
 ```

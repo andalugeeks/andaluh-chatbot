@@ -31,13 +31,161 @@ services:
       - LLM_PROVIDER=ollama
       - OLLAMA_BASE_URL=http://ollama:11434
       - OLLAMA_MODEL=llama3.2:latest
+      # Langfuse Configuration
+      - LANGFUSE_HOST=http://langfuse-server:3000
+      - LANGFUSE_BASE_URL=http://langfuse-server:3000
+      # Create project at http://localhost:3000 to get keys:
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
+      - LOGIN_ENABLED=false
     depends_on:
       - ollama
     networks:
       - andaluh-net
 
+  langfuse-db:
+    image: postgres:16
+    restart: always
+    container_name: andaluh-langfuse-db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=postgres
+    volumes:
+      - langfuse_db_data:/var/lib/postgresql/data
+    networks:
+      - andaluh-net
+
+  langfuse-server:
+    image: langfuse/langfuse:latest
+    container_name: andaluh-langfuse-server
+    depends_on:
+      - langfuse-db
+      - clickhouse
+      - redis
+      - minio
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@langfuse-db:5432/postgres
+      - NEXTAUTH_SECRET=mysecret
+      - SALT=mysalt
+      - ENCRYPTION_KEY=deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef
+      - NEXTAUTH_URL=http://localhost:3000
+      - TELEMETRY_ENABLED=false
+      # Clickhouse configuration
+      - CLICKHOUSE_URL=http://clickhouse:8123
+      - CLICKHOUSE_USER=default
+      - CLICKHOUSE_PASSWORD=password
+      - CLICKHOUSE_MIGRATION_URL=clickhouse://clickhouse:9000
+      - CLICKHOUSE_CLUSTER_ENABLED=false
+      # Redis configuration
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_AUTH=andaluhredis
+      - REDIS_PASSWORD=andaluhredis
+      - REDIS_URL=redis://:andaluhredis@redis:6379
+      # MinIO configuration
+      - LANGFUSE_S3_EVENT_UPLOAD_BUCKET=langfuse
+      - LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT=http://minio:9000
+      - LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID=minio
+      - LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY=miniosecret
+      - LANGFUSE_S3_EVENT_UPLOAD_REGION=us-east-1
+      - LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE=true
+      - LANGFUSE_S3_MEDIA_UPLOAD_BUCKET=langfuse
+      - LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT=http://minio:9000
+      - LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID=minio
+      - LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY=miniosecret
+      - LANGFUSE_S3_MEDIA_UPLOAD_REGION=us-east-1
+      - LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE=true
+    networks:
+      - andaluh-net
+
+  langfuse-worker:
+    image: langfuse/langfuse-worker:latest
+    container_name: andaluh-langfuse-worker
+    depends_on:
+      - langfuse-db
+      - clickhouse
+      - redis
+      - minio
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@langfuse-db:5432/postgres
+      - ENCRYPTION_KEY=deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef
+      - TELEMETRY_ENABLED=false
+      - CLICKHOUSE_URL=http://clickhouse:8123
+      - CLICKHOUSE_USER=default
+      - CLICKHOUSE_PASSWORD=password
+      - CLICKHOUSE_MIGRATION_URL=clickhouse://clickhouse:9000
+      - CLICKHOUSE_CLUSTER_ENABLED=false
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_AUTH=andaluhredis
+      - REDIS_PASSWORD=andaluhredis
+      - REDIS_URL=redis://:andaluhredis@redis:6379
+      - LANGFUSE_S3_EVENT_UPLOAD_BUCKET=langfuse
+      - LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT=http://minio:9000
+      - LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID=minio
+      - LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY=miniosecret
+      - LANGFUSE_S3_EVENT_UPLOAD_REGION=us-east-1
+      - LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE=true
+      - LANGFUSE_S3_MEDIA_UPLOAD_BUCKET=langfuse
+      - LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT=http://minio:9000
+      - LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID=minio
+      - LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY=miniosecret
+      - LANGFUSE_S3_MEDIA_UPLOAD_REGION=us-east-1
+      - LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE=true
+    networks:
+      - andaluh-net
+
+  redis:
+    image: redis:7.2.4
+    command: redis-server --requirepass andaluhredis
+    container_name: andaluh-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - andaluh-net
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    container_name: andaluh-clickhouse
+    environment:
+      - CLICKHOUSE_DB=default
+      - CLICKHOUSE_USER=default
+      - CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1
+      - CLICKHOUSE_PASSWORD=password
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+    networks:
+      - andaluh-net
+
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    container_name: andaluh-minio
+    ports:
+      - "9200:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=minio
+      - MINIO_ROOT_PASSWORD=miniosecret
+    volumes:
+      - minio_data:/data
+    networks:
+      - andaluh-net
+
 volumes:
   ollama_data:
+  langfuse_db_data:
+  clickhouse_data:
+  redis_data:
+  minio_data:
 
 
 networks:

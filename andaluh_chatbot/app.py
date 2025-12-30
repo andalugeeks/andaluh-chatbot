@@ -4,11 +4,13 @@ from langchain_core.messages import HumanMessage, AIMessage
 try:
     # Try importing from local package if running from root
     from andaluh_chatbot.agents import get_agent
+    from langfuse.langchain import CallbackHandler
 except ImportError:
     # Adjust path if running differently
     import sys
     sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
     from andaluh_chatbot.agents import get_agent
+    from langfuse.langchain import CallbackHandler
 
 # Configuración de la página
 st.set_page_config(page_title="Andalûh EPA Chatbot", page_icon="🇳🇬")
@@ -17,37 +19,32 @@ st.set_page_config(page_title="Andalûh EPA Chatbot", page_icon="🇳🇬")
 def check_password():
     """Returns `True` if the user had the correct password."""
     
-    def password_entered():
-        """Checks whether a password entered by the user is correct."""
-        if st.session_state["username"] == "admin" and st.session_state["password"] == "andaluh":
-            st.session_state["password_correct"] = True
-            del st.session_state["password"]  # don't store password
-        else:
-            st.session_state["password_correct"] = False
-
     if "password_correct" not in st.session_state:
-        # First run, show inputs
-        st.text_input("Usuario", on_change=None, key="username")
-        st.text_input("Contraseña", type="password", on_change=password_entered, key="password")
-        if st.button("Entrar", on_click=password_entered):
-            return False
-        return False
-        
-    elif not st.session_state["password_correct"]:
-        # Password incomplete or wrong
-        st.text_input("Usuario", on_change=None, key="username")
-        st.text_input("Contraseña", type="password", on_change=password_entered, key="password")
-        if st.button("Entrar", on_click=password_entered):
-            return False
-        st.error("😕 Usuario o contraseña incorrectos")
-        return False
-        
-    else:
-        # Password correct
+        st.session_state.password_correct = False
+
+    if st.session_state.password_correct:
         return True
 
-if not check_password():
-    st.stop()
+    with st.form("login_form"):
+        st.text_input("Usuario", key="username")
+        st.text_input("Contraseña", type="password", key="password")
+        submit = st.form_submit_button("Entrar")
+        
+        if submit:
+            if st.session_state["username"] == "admin" and st.session_state["password"] == "andaluh":
+                st.session_state.password_correct = True
+                st.rerun()
+            else:
+                st.error("😕 Usuario o contraseña incorrectos")
+                
+    return False
+
+# Check if login is enabled
+login_enabled = os.getenv("LOGIN_ENABLED", "true").lower() == "true"
+
+if login_enabled:
+    if not check_password():
+        st.stop()
 
 # --- Interfaz del Chat ---
 
@@ -57,10 +54,24 @@ st.markdown("Escribe en castellano estándar y te responderé en **Andalûh EPA*
 # Inicializar Agente
 @st.cache_resource
 def load_agent():
-    return get_agent()
+    # Initialize Langfuse Callback Handler if credentials are present
+    langfuse_handler = None
+    if os.getenv("LANGFUSE_PUBLIC_KEY") and os.getenv("LANGFUSE_SECRET_KEY"):
+        # Langfuse v3 reads configuration from environment variables
+        # LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, LANGFUSE_HOST
+        langfuse_handler = CallbackHandler()
+    else:
+        st.warning("Langfuse credentials not found. Langfuse will not be used.")
+    return get_agent(), langfuse_handler
 
 try:
-    agent = load_agent()
+    agent, langfuse_handler = load_agent()
+    if not agent:
+        st.error("No se pudo cargar el agente")
+        st.stop()
+    if not langfuse_handler:
+        st.error("No se pudo cargar el langfuse handler")
+        st.stop()
 except Exception as e:
     st.error(f"Error al cargar el agente: {e}")
     st.stop()
@@ -92,7 +103,12 @@ if prompt := st.chat_input("Escribe algo..."):
                 # Invocar al grafo
                 # Pasamos toda la historia
                 inputs = {"messages": st.session_state.messages}
-                final_state = agent.invoke(inputs)
+                
+                config = {}
+                if langfuse_handler:
+                    config["callbacks"] = [langfuse_handler]
+                    
+                final_state = agent.invoke(inputs, config=config)
                 
                 # Obtener último mensaje (Respuesta EPA)
                 ai_response = final_state["messages"][-1]

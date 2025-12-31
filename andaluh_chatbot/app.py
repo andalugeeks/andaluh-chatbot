@@ -48,8 +48,8 @@ if login_enabled:
 
 # --- Interfaz del Chat ---
 
-st.title("🇳🇬 Andalûh EPA Chatbot")
-st.markdown("Escribe en castellano estándar y te responderé en **Andalûh EPA**.")
+st.title("🇳🇬 Chatbot Andaluh")
+st.markdown("Pregúntame argo çobre el'Andalûh.")
 
 # Inicializar Agente
 @st.cache_resource

@@ -35,51 +35,85 @@ def get_chat_model():
 def get_agent():
     llm = get_chat_model()
     
-    # 1. Chat Node: Generates response in Spanish
-    def chatbot(state: State):
-        messages = state["messages"]
-        # Ensure system message is present or implicit. 
-        # For simplicity, we prepend a system instruction if not present, 
-        # or we just rely on the LLM's ability to answer.
-        # Let's add a system prompt to ensure Spanish output.
-        system_prompt = SystemMessage(content="Eres un asistente útil y amable. Responde siempre en español estándar.")
-        
-        # Invoke LLM
-        response = llm.invoke([system_prompt] + messages)
-        return {"messages": [response]}
-
-    # 2. Translator Node: Translates the last AI message to Andalûh EPA
-    def translator(state: State):
+    # Router Logic
+    def route_intent(state: State) -> Literal["chatbot", "translator", "andalofilo"]:
         messages = state["messages"]
         last_message = messages[-1]
         
-        if isinstance(last_message, AIMessage) and last_message.content:
-            # Translate content
-            translated_text = epa(last_message.content)
-            
-            # We replace the last message content or create a new one?
-            # User wants "the system to behave like a chat... final step allows translation".
-            # Usually replacing the content makes it look like the bot speaks Andalûh.
-            # Let's update the content of the AI message effectively.
-            # In LangGraph with add_messages, simply returning a message with same ID would update it, 
-            # but usually unique IDs are auto-generated. 
-            # Let's just return a NEW message that represents the final output, 
-            # OR we can manually construct the response.
-            
-            # Construct a new AI Message with the translated text.
-            # Ideally, we want the user to see the Andaluh version.
-            return {"messages": [AIMessage(content=translated_text)]}
-            
-        return {}
+        prompt = f"""Analiza el último mensaje del usuario y clasifica su intención.
+        
+        1. Si el usuario quiere traducir un texto explícitamente a Andalûh EPA (e.g. "traduce esto...", "cómo se dice X en andaluz"), responde "translator".
+        2. Si el usuario pregunta sobre el andaluz como lengua/dialecto, su ortografía, gramática, historia, o la propuesta EPA, responde "andalofilo".
+        3. En cualquier otro caso (conversación normal, preguntas generales, saludos), responde "chatbot".
+        
+        Usuario: {last_message.content if isinstance(last_message, HumanMessage) else ""}
+        
+        Responde ÚNICAMENTE con una de las tres palabras: "translator", "andalofilo" o "chatbot"."""
+        
+        response = llm.invoke([SystemMessage(content="Eres un clasificador de intenciones."), HumanMessage(content=prompt)])
+        intent = response.content.strip().lower()
+        
+        if "translator" in intent:
+            return "translator"
+        if "andalofilo" in intent:
+            return "andalofilo"
+        return "chatbot"
+
+    # 1. Chat Node: Generates response in Spanish
+    def chatbot(state: State):
+        messages = state["messages"]
+        system_prompt = SystemMessage(content="Eres un asistente útil y amable. Responde siempre en español estándar.")
+        response = llm.invoke([system_prompt] + messages)
+        return {"messages": [response]}
+
+    # 2. Translator Node: Translates user text to Andalûh EPA
+    def translator(state: State):
+        from andaluh_chatbot.tools import translate_to_andaluh_epa
+        messages = state["messages"]
+        last_message = messages[-1] # User message requesting translation
+        
+        # Bind the translation tool to the LLM to extract the text to translate
+        llm_with_tools = llm.bind_tools([translate_to_andaluh_epa])
+        
+        prompt = f"""El usuario quiere traducir un texto a Andalûh EPA.
+        Invoca la herramienta 'translate_to_andaluh_epa' con el texto EXACTO que el usuario quiere traducir.
+        Si el usuario dice "Traduce 'Hola mundo'", el texto es "Hola mundo".
+        
+        Mensaje del usuario: {last_message.content}
+        """
+        
+        # Invoke LLM with tools
+        decision = llm_with_tools.invoke([SystemMessage(content="Eres un traductor."), HumanMessage(content=prompt)])
+        
+        # Check if tool was called
+        if decision.tool_calls:
+            tool_call = decision.tool_calls[0]
+            if tool_call["name"] == "translate_to_andaluh_epa":
+                text_to_translate = tool_call["args"].get("text", "")
+                if text_to_translate:
+                    translated_text = epa(text_to_translate)
+                    return {"messages": [AIMessage(content=translated_text)]}
+        
+        # Fallback if no specific text found or tool failure
+        return {"messages": [AIMessage(content="No he entendido qué texto quieres traducir.")]}
+
+    # 3. Andalofilo Node: Expert in Andalusian linguistics
+    def andalofilo(state: State):
+        messages = state["messages"]
+        system_prompt = SystemMessage(content="Eres un experto lingüista en el dialecto andaluz y la propuesta ortográfica EPA (Êttandâ pal Andalûh). Responde a las dudas del usuario con rigor pero de forma divulgativa.")
+        response = llm.invoke([system_prompt] + messages)
+        return {"messages": [response]}
 
     # Build Graph
     graph_builder = StateGraph(State)
     graph_builder.add_node("chatbot", chatbot)
     graph_builder.add_node("translator", translator)
+    graph_builder.add_node("andalofilo", andalofilo)
 
-    # Define edges
-    graph_builder.add_edge(START, "chatbot")
-    graph_builder.add_edge("chatbot", "translator")
+    # Define edges with router
+    graph_builder.add_conditional_edges(START, route_intent)
+    graph_builder.add_edge("chatbot", END)
     graph_builder.add_edge("translator", END)
+    graph_builder.add_edge("andalofilo", END)
 
     return graph_builder.compile()
